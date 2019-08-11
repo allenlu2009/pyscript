@@ -69,6 +69,8 @@ def parse(argv):
   ap = argparse.ArgumentParser()
   ap.add_argument("-n", "--network", default="alexnet",
         help="name of network")
+  ap.add_argument("-p", "--prefix", default="car_ims/",
+        help="prefix of the path")
   ap.add_argument("-d", "--dataset", default="imagenet",
         help="name of dataset")
   ap.add_argument("-l", "--logfile", default="tst.log",
@@ -89,19 +91,32 @@ def parse(argv):
   print(df.columns)
   print(df.info())
 
-  df_train = df[df.loc[:,"test"]==0] # select test==0
-  df_test = df[df.loc[:,"test"]==1] # select test==1
-  print("test_df", df_test.head(), df_test.info())
-  print("train_df", df_train.head(), df_train.info())
+  # Filter rows of train and test based on "test" column
+  #df_train = df[df.loc[:,"test"]==0] # select test==0
+  #df_test = df[df.loc[:,"test"]==1] # select test==1
+  
+  # Filter rows of train and test based on "class" column
+  threshold = 98
+  df_train = df[df.loc[:,"class"]<=threshold] # select class < 98
+  df_test = df[df.loc[:,"class"]>threshold] # select class > 98
+  
+  print("\n\ndf_test: ", df_test.shape, "\n", df_test.head(), df_test.info())
+  print("\n\ndf_train: ", df_train.shape, "\n", df_train.head(), df_train.info())
 
+  # Filter columns of "Image" and "class"
   df_train_out = df_train[['Image', 'class']]
   df_test_out = df_test[['Image', 'class']]
-  print(df_test_out.head())
-  print(df_train_out.head())
+  print("\n\ndf_test_out: ", df_test_out.shape, "\n", df_test_out.head(), df_test_out.info())
+  print("\n\ndf_train_out: ", df_train_out.shape, "\n", df_train_out.head(), df_train_out.info())
 
   # add prefix on the file name
-  df_train_out["Image"] = 'ttt' + df_train_out["Image"].astype(str)
-  print(df_train_out.head())
+  df_train_out.loc[:,"Image"] = args["prefix"] + df_train_out.loc[:,"Image"].astype(str)
+  df_test_out.loc[:,"Image"] = args["prefix"] + df_test_out.loc[:,"Image"].astype(str)
+  print("\n\ndf_test_out: ", df_test_out.shape, "\n", df_test_out.head(), df_test_out.info())
+  print("\n\ndf_train_out: ", df_train_out.shape, "\n", df_train_out.head(), df_train_out.info())
+
+  df_train_out.to_csv('train.txt', sep=" ", header=0, index=0)
+  df_test_out.to_csv('test.txt', sep=" ", header=0, index=0)
 
   #for row in df:
   #      print(row)
