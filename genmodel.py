@@ -25,14 +25,15 @@ class Net(nn.Module):
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # PyTorch v0.4.0
 model = Net().to(device)
-print(model)
-input_size = (1, 28, 28)
-print("input_size is:", input_size)
-summary(model, input_size)
+#print(model)
+# Need to provide the input layer in the folllowing format
+#print("Input-0\t\t[-1, 3, 224, 224]\t 0")
+#summary(model, input_size)
 
 #modelvgg = models.vgg16().to(device)
 modelvgg = models.resnet50().to(device)
-print(modelvgg)
 input_size = (3, 224, 224)
-print("input_size is:", input_size)
+print("    Input-0     [-1, 3, 224, 224]     0")
 summary(modelvgg, input_size)
+print(modelvgg)
+

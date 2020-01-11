@@ -6,11 +6,23 @@ import argparse
 import sys
 import os
 import re
-#import pandas as pd
+import pandas as pd
 
 # set up regular expressions
 # use https://regexper.com to visualise these if required
 rx_dict = {
+    'in':  re.compile(r'^\s*(?P<layer>Input\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
+    'conv2d': re.compile(r'^\s*(?P<layer>Conv2d\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
+    'bn2d': re.compile(r'^\s*(?P<layer>BatchNorm2d\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
+    'relu': re.compile(r'^\s*(?P<layer>ReLU\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
+    'linear': re.compile(r'^\s*(?P<layer>Linear\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
+    'pool2d': re.compile(r'^\s*(?P<layer>\S*Pool2d\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
+    'bottleneck': re.compile(r'^\s*(?P<layer>Bottleneck\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
+    'drop2d': re.compile(r'^\s*(?P<layer>Dropout2d\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
+}
+
+model_dict = {
+    'in':  re.compile(r'^\s*(?P<layer>Input\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
     'conv2d': re.compile(r'^\s*(?P<layer>Conv2d\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
     'bn2d': re.compile(r'^\s*(?P<layer>BatchNorm2d\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
     'relu': re.compile(r'^\s*(?P<layer>ReLU\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
@@ -23,7 +35,7 @@ rx_dict = {
 
 
 def print_sysinfo(logfile, argvstr, cc='#'):
-  #print(argvstr)
+  #print(argvstr) 
   date = os.popen('date').read().rstrip()
   pwd  = os.popen('pwd').read().rstrip()
   hostname = os.popen('hostname').read().rstrip()
@@ -37,6 +49,21 @@ def print_sysinfo(logfile, argvstr, cc='#'):
 
     
 def _parse_line(line):
+    """
+    Do a regex search against all defined regexes and
+    return the key and match result of the first matching regex
+
+    """
+
+    for key, rx in rx_dict.items():
+        match = rx.search(line)
+        if match:
+            return key, match
+    # if there are no matches
+    return None, None
+
+
+def _parse_model(line):
     """
     Do a regex search against all defined regexes and
     return the key and match result of the first matching regex
@@ -69,13 +96,33 @@ def parse_file(filepath):
     """
 
     data = []  # create an empty list to collect the data
+    net = []
     # open the file and read through it line by line
     with open(filepath, 'r') as file_object:
         line = file_object.readline()
 
         while line:
-          # at each line check for a match with a regex
+          # at each line check for a match with a regex parsing output shape
           key, match = _parse_line(line)
+
+          if key == 'in':
+                layer = match.group('layer')
+                param = int(match.group('param').replace(',', ''))  # remove comma
+                shape_arr = match.group('shape').split(', ')
+                batch = int(shape_arr[0])
+                channel = int(shape_arr[1])
+                width = int(shape_arr[2])
+                height = int(shape_arr[3])
+                row = {
+                      'Layer': layer,
+                      'Batch': batch,
+                      'Channel': channel,
+                      'Width': width,
+                      'Height': height,
+                      'Param': param
+                }
+                data.append(row)
+                print('{} \t\t[{}, {}, {}, {}]\t{}'.format(layer, batch, channel, width, height, param))
 
           if key == 'conv2d':
                 layer = match.group('layer')
@@ -85,6 +132,15 @@ def parse_file(filepath):
                 channel = int(shape_arr[1])
                 width = int(shape_arr[2])
                 height = int(shape_arr[3])
+                row = {
+                      'Layer': layer,
+                      'Batch': batch,
+                      'Channel': channel,
+                      'Width': width,
+                      'Height': height,
+                      'Param': param
+                }
+                data.append(row)
                 print('{} \t\t[{}, {}, {}, {}]\t{}'.format(layer, batch, channel, width, height, param))
 
           if key in ('bn2d', 'relu', 'pool2d', 'bottleneck'):
@@ -95,6 +151,15 @@ def parse_file(filepath):
                 channel = int(shape_arr[1])
                 width = int(shape_arr[2])
                 height = int(shape_arr[3])
+                row = {
+                      'Layer': layer,
+                      'Batch': batch,
+                      'Channel': channel,
+                      'Width': width,
+                      'Height': height,
+                      'Param': param
+                }
+                data.append(row)
                 print('{} \t\t[{}, {}, {}, {}]\t{}'.format(layer, batch, channel, width, height, param))
 
           if key == 'drop2d':
@@ -105,6 +170,15 @@ def parse_file(filepath):
                 channel = int(shape_arr[1])
                 width = int(shape_arr[2])
                 height = int(shape_arr[3])
+                row = {
+                      'Layer': layer,
+                      'Batch': batch,
+                      'Channel': channel,
+                      'Width': width,
+                      'Height': height,
+                      'Param': param
+                }
+                data.append(row)
                 print('{} \t\t[{}, {}, {}, {}]\t{}'.format(layer, batch, channel, width, height, param))
 
           if key == 'linear':
@@ -113,30 +187,32 @@ def parse_file(filepath):
                 shape_arr = match.group('shape').split(',')
                 batch = int(shape_arr[0])
                 channel = int(shape_arr[1])
+                row = {
+                      'Layer': layer,
+                      'Batch': batch,
+                      'Channel': channel,
+                      'Param': param
+                }
+                data.append(row)
                 print('{} \t\t[{}, {}]\t{}'.format(layer, batch, channel, param))
 
-          #line_pattern = r'^\s*(\S+)\s+\[(.+)\]\s+(\S+)$'
-          #match_line = re.match(line_pattern, line)
+          # at each line check for a match with a regex parsing output shape
+          
+          #key, match = _parse_model(line)
 
-          #if match_line:
-          #  print(line)
-          #  layer_type = match_line.group(1)
-          #  output_shape = match_line.group(2)
-          #  out_shape_arr =  output_shape.split(', ')
-          #  #if len(out_shape_arr): 
-          #  param = match_line.group(3)
-          #  param_int = int(param.replace(',',''))  # remove comma in the string
-            
-          #  batch = int(out_shape_arr[0])
-          #  channel = int(out_shape_arr[1])
-          #  #width = int(out_shape_arr[2])
-          #  #height = int(out_shape_arr[3])
-
-          #  newline = layer_type + " " + output_shape + " " + str(param_int)
-          #  data.append(newline)
+          #if key == 'in':
 
           line = file_object.readline()
-
+          
+        # create a pandas DataFrame from the list of dicts
+        data = pd.DataFrame(data, columns = ["Layer", "Channel", "Width", "Height", "Param"]) 
+        print(data)
+        #data.set_index('Layer', inplace=True)
+        # consolidate df to remove nans
+        #data = data.groupby(level=data.index.names).first()
+        # upgrade Score from float to integer
+        #data = data.apply(pd.to_numeric, errors='ignore')
+    
     return data
 
   
@@ -162,12 +238,15 @@ def parse(argv):
   outfile = open(args["outfile"], 'w', encoding='UTF-8')
   print("args: ",args)
 
-  df = parse_file(args["infile"])
+  data = parse_file(args["infile"])
+  
+  print(data)
+  
 
-  for row in df:
-    print(row.rstrip())
-  for row in df:
-    print(row.rstrip(), file=outfile)
+  #for row in df:
+  #  print(row.rstrip())
+  #for row in df:
+  #  print(row.rstrip(), file=outfile)
 
 
 
