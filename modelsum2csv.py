@@ -22,13 +22,14 @@ rx_dict = {
 }
 
 model_dict = {
-    'in':  re.compile(r'^\s*(?P<layer>Input\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
-    'conv2d': re.compile(r'^\s*(?P<layer>Conv2d\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
-    'bn2d': re.compile(r'^\s*(?P<layer>BatchNorm2d\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
-    'relu': re.compile(r'^\s*(?P<layer>ReLU\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
-    'linear': re.compile(r'^\s*(?P<layer>Linear\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
-    'pool2d': re.compile(r'^\s*(?P<layer>\S*Pool2d\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
-    'bottleneck': re.compile(r'^\s*(?P<layer>Bottleneck\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
+    'conv2d': re.compile(r'^\s*\(\S+\)\:\s*(?P<layer>Conv2d)\((?P<arg>.*)\)'),
+    'bn2d': re.compile(r'^\s*\(\S+\)\:\s*(?P<layer>BatchNorm2d)\((?P<arg>.*)\)'),
+    'maxpool2d': re.compile(r'^\s*\(\S+\)\:\s*(?P<layer>MaxPool2d)\((?P<arg>.*)\)'),
+    'avgpool2d': re.compile(r'^\s*\(\S+\)\:\s*(?P<layer>AdaptiveAvgPool2d)\((?P<arg>.*)\)'),
+    'linear': re.compile(r'^\s*\(\S+\)\:\s*(?P<layer>Linear)\((?P<arg>.*)\)'),
+    'relu': re.compile(r'^\s*\(\S+\)\:\s*(?P<layer>ReLU)\((?P<arg>.*)\)'),
+    'bottleneck': re.compile(r'^\s*\(\S+\)\:\s*(?P<layer>Bottleneck)\((?P<arg>.*)\)'),
+    'seq': re.compile(r'^\s*\(\S+\)\:\s*(?P<layer>Sequential)\((?P<arg>.*)\)'),
     'drop2d': re.compile(r'^\s*(?P<layer>Dropout2d\S+)\s+\[(?P<shape>.+)\]\s+(?P<param>\S+)$'),
 }
 
@@ -49,11 +50,15 @@ def print_sysinfo(logfile, argvstr, cc='#'):
 
     
 def _parse_line(line):
-    """
-    Do a regex search against all defined regexes and
-    return the key and match result of the first matching regex
 
-    """
+    for key, rx in rx_dict.items():
+        match = rx.search(line)
+        if match:
+            return key, match
+    # if there are no matches
+    return None, None
+
+def _parse_line_shape(line):
 
     for key, rx in rx_dict.items():
         match = rx.search(line)
@@ -63,20 +68,284 @@ def _parse_line(line):
     return None, None
 
 
-def _parse_model(line):
-    """
-    Do a regex search against all defined regexes and
-    return the key and match result of the first matching regex
+def _parse_line_model(line):
 
-    """
-
-    for key, rx in rx_dict.items():
+    for key, rx in model_dict.items():
         match = rx.search(line)
         if match:
             return key, match
     # if there are no matches
     return None, None
 
+
+
+def parse_file_2(filepath):
+      try:
+            # open the file and read through it line by line
+            with open(filepath, 'r') as fileObject:
+                  fileLst = fileObject.read().split("\n")   
+                  
+            fileLstClean = [data.strip() for data in fileLst] 
+            
+            modelStartIndex = fileLstClean.index('=Model Start=')
+            modelStopIndex = fileLstClean.index('=Model End=')
+
+            shapeStartIndex = fileLstClean.index('=Shape Start=')
+            shapeStopIndex = fileLstClean.index('=Shape End=')
+
+            modelStr = "\n".join(fileLst[modelStartIndex+1:modelStopIndex])
+            shapeStr = "\n".join(fileLst[shapeStartIndex+1:shapeStopIndex])
+            print(shapeStr)
+            print(modelStr)
+
+            modelLst = fileLst[modelStartIndex+1:modelStopIndex]
+            shapeLst = fileLst[shapeStartIndex+1:shapeStopIndex]
+
+            parse_shape(shapeLst)
+            parse_model(modelLst)
+
+
+      except Exception as e:
+            print(e)
+      
+      
+      
+      
+def parse_shape(shapeLst):
+
+      data = []
+      
+      for line in shapeLst:
+          key, match = _parse_line_shape(line)
+
+          if key == 'in':
+                layer = match.group('layer')
+                param = int(match.group('param').replace(',', ''))  # remove comma
+                shape_arr = match.group('shape').split(', ')
+                batch = int(shape_arr[0])
+                channel = int(shape_arr[1])
+                width = int(shape_arr[2])
+                height = int(shape_arr[3])
+                row = {
+                      'Layer': layer,
+                      'Batch': batch,
+                      'Channel': channel,
+                      'Width': width,
+                      'Height': height,
+                      'Param': param
+                }
+                data.append(row)
+                print('{} \t\t[{}, {}, {}, {}]\t{}'.format(layer, batch, channel, width, height, param))
+
+          if key == 'conv2d':
+                layer = match.group('layer')
+                param = int(match.group('param').replace(',', ''))  # remove comma
+                shape_arr = match.group('shape').split(', ')
+                batch = int(shape_arr[0])
+                channel = int(shape_arr[1])
+                width = int(shape_arr[2])
+                height = int(shape_arr[3])
+                row = {
+                      'Layer': layer,
+                      'Batch': batch,
+                      'Channel': channel,
+                      'Width': width,
+                      'Height': height,
+                      'Param': param
+                }
+                data.append(row)
+                print('{} \t\t[{}, {}, {}, {}]\t{}'.format(layer, batch, channel, width, height, param))
+
+          if key in ('bn2d', 'relu', 'pool2d', 'bottleneck'):
+                layer = match.group('layer')
+                param = int(match.group('param').replace(',', ''))  # remove comma
+                shape_arr = match.group('shape').split(',')
+                batch = int(shape_arr[0])
+                channel = int(shape_arr[1])
+                width = int(shape_arr[2])
+                height = int(shape_arr[3])
+                row = {
+                      'Layer': layer,
+                      'Batch': batch,
+                      'Channel': channel,
+                      'Width': width,
+                      'Height': height,
+                      'Param': param
+                }
+                data.append(row)
+                print('{} \t\t[{}, {}, {}, {}]\t{}'.format(layer, batch, channel, width, height, param))
+
+          if key == 'drop2d':
+                layer = match.group('layer')
+                param = int(match.group('param').replace(',', ''))  # remove comma
+                shape_arr = match.group('shape').split(',')
+                batch = int(shape_arr[0])
+                channel = int(shape_arr[1])
+                width = int(shape_arr[2])
+                height = int(shape_arr[3])
+                row = {
+                      'Layer': layer,
+                      'Batch': batch,
+                      'Channel': channel,
+                      'Width': width,
+                      'Height': height,
+                      'Param': param
+                }
+                data.append(row)
+                print('{} \t\t[{}, {}, {}, {}]\t{}'.format(layer, batch, channel, width, height, param))
+
+          if key == 'linear':
+                layer = match.group('layer')
+                param = int(match.group('param').replace(',', ''))  # remove comma
+                shape_arr = match.group('shape').split(',')
+                batch = int(shape_arr[0])
+                channel = int(shape_arr[1])
+                row = {
+                      'Layer': layer,
+                      'Batch': batch,
+                      'Channel': channel,
+                      'Param': param
+                }
+                data.append(row)
+                print('{} \t\t[{}, {}]\t{}'.format(layer, batch, channel, param))
+
+      data = pd.DataFrame(data, columns = ["Layer", "Channel", "Width", "Height", "Param"]) 
+      print(data)
+
+      
+### use line + regex to parse the model summary. Need to rewrite it using parser
+def parse_model(modelLst):
+
+      modelName = modelLst[0]
+      data = []
+      
+      for line in modelLst:
+          key, match = _parse_line_model(line)
+
+          if key == 'conv2d':
+                layer = match.group('layer')
+                arg = match.group('arg').replace(" ", "") #remove space for regex
+                ## further parsing the arg 
+                pat = r'(\d+),(\d+),.*kernel.*=\((\d+),(\d+)\),.*stride=\((\d+),(\d+)\)'
+                arg_m = re.match(pat, arg)
+                if arg_m:
+                  row = {
+                      'Layer': layer,
+                      'ChI': int(arg_m.group(1)),
+                      'ChO': int(arg_m.group(2)),
+                      'Kernel': int(arg_m.group(3)),
+                      'Stride': int(arg_m.group(5)),
+                      'Padding': -1
+                  }
+                  data.append(row)
+
+          if key == 'maxpool2d':
+                layer = match.group('layer')
+                arg = match.group('arg').replace(" ", "") #remove space for regex
+                ## further parsing the arg 
+                pat = r'.*kernel.*=(\d+),.*stride=(\d+),.*padding=(\d+).*'
+                arg_m = re.match(pat, arg)
+                if arg_m:
+                  row = {
+                      'Layer': layer,
+                      'ChI': -1,
+                      'ChO': -1,
+                      'Kernel': int(arg_m.group(1)),
+                      'Stride': int(arg_m.group(2)),
+                      'Padding': int(arg_m.group(3))
+                  }
+                  data.append(row)
+                  
+          if key == 'linear':
+                layer = match.group('layer')
+                arg = match.group('arg').replace(" ", "") #remove space for regex
+                ## further parsing the arg 
+                pat = r'.*in_features=(\d+),.*out_features=(\d+),.'
+                arg_m = re.match(pat, arg)
+                if arg_m:
+                  row = {
+                      'Layer': layer,
+                      'ChI': int(arg_m.group(1)),
+                      'ChO': int(arg_m.group(2)),
+                      'Kernel': -1,
+                      'Stride': -1,
+                      'Padding': -1
+                  }
+                  data.append(row)
+                  
+          if key == 'bn2d':
+                layer = match.group('layer')
+                arg = match.group('arg').replace(" ", "") #remove space for regex
+                ## further parsing the arg 
+                pat = r'(\d+),.*'
+                arg_m = re.match(pat, arg)
+                if arg_m:
+                  row = {
+                      'Layer': layer,
+                      'ChI': int(arg_m.group(1)),
+                      'ChO': int(arg_m.group(1)),
+                      'Kernel': -1,
+                      'Stride': -1,
+                      'Padding': -1
+                  }
+                  data.append(row)
+                  
+
+          if key == 'relu':
+                layer = match.group('layer')
+                arg = match.group('arg').replace(" ", "") #remove space for regex
+                row = {
+                      'Layer': layer,
+                      'ChI': -1,
+                      'ChO': -1,
+                      'Kernel': -1,
+                      'Stride': -1,
+                      'Padding': -1
+                }
+                data.append(row)
+                  
+          if key == 'avgpool2d':
+                layer = match.group('layer')
+                arg = match.group('arg')
+                row = {
+                      'Layer': layer,
+                      'Arg': arg
+                }
+                data.append(row)
+
+          if key == 'bottleneck':
+                layer = match.group('layer')
+                arg = match.group('arg')
+                row = {
+                      'Layer': layer,
+                      'Arg': arg
+                }
+                data.append(row)
+
+
+          if key == 'drop2d':
+                layer = match.group('layer')
+                param = int(match.group('param').replace(',', ''))  # remove comma
+                shape_arr = match.group('shape').split(',')
+                batch = int(shape_arr[0])
+                channel = int(shape_arr[1])
+                width = int(shape_arr[2])
+                height = int(shape_arr[3])
+                row = {
+                      'Layer': layer,
+                      'Batch': batch,
+                      'Channel': channel,
+                      'Width': width,
+                      'Height': height,
+                      'Param': param
+                }
+                data.append(row)
+                print('{} \t\t[{}, {}, {}, {}]\t{}'.format(layer, batch, channel, width, height, param))
+
+
+      df = pd.DataFrame(data, columns = ["Layer", "ChI", "ChO", "Kernel", "Stride", "Padding"]) 
+      print(df[df['Layer'] == 'ReLU'])
+      #print(df)
 
 
   
@@ -96,7 +365,7 @@ def parse_file(filepath):
     """
 
     data = []  # create an empty list to collect the data
-    net = []
+
     # open the file and read through it line by line
     with open(filepath, 'r') as file_object:
         line = file_object.readline()
@@ -238,7 +507,8 @@ def parse(argv):
   outfile = open(args["outfile"], 'w', encoding='UTF-8')
   print("args: ",args)
 
-  data = parse_file(args["infile"])
+  #data = parse_file(args["infile"])
+  data = parse_file_2(args["infile"])
   
   print(data)
   

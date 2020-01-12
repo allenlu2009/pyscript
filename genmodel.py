@@ -32,8 +32,14 @@ model = Net().to(device)
 
 #modelvgg = models.vgg16().to(device)
 modelvgg = models.resnet50().to(device)
+
 input_size = (3, 224, 224)
+print("\n\n\n=Shape Start=")
 print("    Input-0     [-1, 3, 224, 224]     0")
 summary(modelvgg, input_size)
+print("=Shape End=")
+
+print("\n\n\n=Model Start=")
 print(modelvgg)
+print("=Model End=")
 
